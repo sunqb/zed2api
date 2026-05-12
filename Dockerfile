@@ -9,55 +9,33 @@ RUN npm ci --prefer-offline
 COPY webui/ ./
 RUN npm run build
 
-# ── Stage 2: Build Zig binary ─────────────────────────────────────────────────
-FROM --platform=$BUILDPLATFORM alpine:3.21 AS zig-builder
+# ── Stage 2: Build Go binary ──────────────────────────────────────────────────
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS go-builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-ARG ZIG_VERSION=0.15.2
 
-# Install build deps
-RUN apk add --no-cache curl xz
-
-# Download Zig toolchain for the build platform
-RUN ARCH=$(uname -m) && \
-    ZIG_TARBALL="zig-linux-${ARCH}-${ZIG_VERSION}.tar.xz" && \
-    curl -fsSL "https://ziglang.org/builds/${ZIG_TARBALL}" -o /tmp/zig.tar.xz && \
-    tar -xJf /tmp/zig.tar.xz -C /opt && \
-    mv /opt/zig-linux-${ARCH}-${ZIG_VERSION} /opt/zig && \
-    rm /tmp/zig.tar.xz
-
-ENV PATH="/opt/zig:$PATH"
+ENV GOPROXY=https://goproxy.cn,direct
+ENV CGO_ENABLED=0
 
 WORKDIR /build
 
-COPY build.zig build.zig.zon ./
-COPY src/ ./src/
+COPY go.mod ./
+RUN go mod download
 
-# Copy pre-built WebUI dist so Zig doesn't need Node at build time
+COPY *.go ./
+
+# Copy pre-built WebUI so go:embed picks it up
 COPY --from=webui-builder /build/webui/dist ./webui/dist/
 
-# Cross-compile for target platform
-RUN case "$TARGETARCH" in \
-      amd64) ZIG_TARGET="x86_64-linux" ;; \
-      arm64) ZIG_TARGET="aarch64-linux" ;; \
-      *) echo "Unsupported arch: $TARGETARCH" && exit 1 ;; \
-    esac && \
-    zig build -Dtarget=${ZIG_TARGET} -Doptimize=ReleaseSafe && \
-    cp zig-out/bin/zed2api /build/zed2api
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o zed2api .
 
-# ── Stage 3: Run ─────────────────────────────────────────────────────────────
-# Use alpine (not distroless) because zed2api calls curl at runtime for streaming
-FROM alpine:3.21
-
-RUN apk add --no-cache curl ca-certificates && \
-    addgroup -S app && adduser -S -G app app
+# ── Stage 3: Runtime ──────────────────────────────────────────────────────────
+FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /app
 
-COPY --from=zig-builder /build/zed2api .
-
-USER app
+COPY --from=go-builder /build/zed2api /app/zed2api
 
 EXPOSE 8000
 
