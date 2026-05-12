@@ -32,7 +32,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o zed2api .
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM --platform=linux/amd64 gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /app
 
