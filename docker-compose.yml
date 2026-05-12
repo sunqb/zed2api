@@ -1,0 +1,22 @@
+services:
+  zed2api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zed2api:latest
+    container_name: zed2api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
+    volumes:
+      # accounts.json holds sensitive Zed credentials — mount from host
+      - ${ACCOUNTS_FILE:-./accounts.json}:/app/accounts.json:rw
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/v1/models"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
