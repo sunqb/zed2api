@@ -10,17 +10,14 @@ COPY webui/ ./
 RUN npm run build
 
 # ── Stage 2: Build Go binary ──────────────────────────────────────────────────
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS go-builder
-
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS go-builder
 
 ENV GOPROXY=https://goproxy.cn,direct
 ENV CGO_ENABLED=0
 
 WORKDIR /build
 
-COPY go.mod ./
+COPY go.mod go.sum* ./
 RUN go mod download
 
 COPY *.go ./
@@ -28,7 +25,7 @@ COPY *.go ./
 # Copy pre-built WebUI so go:embed picks it up
 COPY --from=webui-builder /build/webui/dist ./webui/dist/
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o zed2api .
+RUN go build -trimpath -ldflags="-s -w" -o zed2api .
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM gcr.io/distroless/static-debian12:nonroot
@@ -36,6 +33,8 @@ FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 
 COPY --from=go-builder /build/zed2api /app/zed2api
+
+USER nonroot:nonroot
 
 EXPOSE 8000
 
