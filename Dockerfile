@@ -12,6 +12,9 @@ RUN npm run build
 # ── Stage 2: Build Go binary ──────────────────────────────────────────────────
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS go-builder
 
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
 ENV GOPROXY=https://goproxy.cn,direct
 ENV CGO_ENABLED=0
 
@@ -25,7 +28,8 @@ COPY *.go ./
 # Copy pre-built WebUI so go:embed picks it up
 COPY --from=webui-builder /build/webui/dist ./webui/dist/
 
-RUN go build -trimpath -ldflags="-s -w" -o zed2api .
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o zed2api .
 
 # ── Stage 3: Runtime ──────────────────────────────────────────────────────────
 FROM gcr.io/distroless/static-debian12:nonroot
