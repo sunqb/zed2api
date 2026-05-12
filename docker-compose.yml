@@ -1,9 +1,6 @@
 services:
   zed2api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: zed2api:latest
+    image: sunqb/zed2api:latest
     container_name: zed2api
     restart: unless-stopped
     ports:
@@ -11,12 +8,8 @@ services:
     environment:
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - ALL_PROXY=${ALL_PROXY:-}
+      - ACCOUNTS_FILE=/data/accounts.json
     volumes:
-      # accounts.json holds sensitive Zed credentials — mount from host
-      - ${ACCOUNTS_FILE:-./accounts.json}:/app/accounts.json:rw
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8000/v1/models"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
+      # Mount the directory containing accounts.json (single-file bind mounts
+      # are unreliable on some Docker setups)
+      - ${ACCOUNTS_DIR:-~}:/data:ro
