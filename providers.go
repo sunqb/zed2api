@@ -147,7 +147,7 @@ func buildAnthropicRequest(parsed map[string]json.RawMessage, model string, isAn
 	sb.WriteString(`"model":`)
 	modelJSON, _ := json.Marshal(model)
 	sb.Write(modelJSON)
-	sb.WriteString(",")
+	sb.WriteString(`,"stream":true,`)
 
 	if mt, ok := parsed["max_tokens"]; ok {
 		sb.WriteString(`"max_tokens":`)
@@ -454,7 +454,7 @@ func buildGoogleRequest(parsed map[string]json.RawMessage, model string, isAnthr
 	modelJSON, _ := json.Marshal(fullModel)
 	sb.WriteString(`"model":`)
 	sb.Write(modelJSON)
-	sb.WriteString(",")
+	sb.WriteString(`,"stream":true,`)
 
 	if isAnthropic {
 		if sys := extractSystemText(parsed); sys != "" {
