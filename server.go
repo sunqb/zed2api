@@ -15,6 +15,9 @@ import (
 //go:embed webui/dist
 var webuiFS embed.FS
 
+//go:embed models.json
+var staticModelsJSON []byte
+
 func runServer(port int) error {
 	initProxy()
 
@@ -208,34 +211,66 @@ func handleModels(w http.ResponseWriter, r *http.Request, mgr *AccountManager) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+
 	acc := mgr.getCurrent()
 	if acc == nil {
-		// Return a minimal static list
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"object": "list",
-			"data":   []any{},
-		})
+		w.Write(staticModelsJSON)
 		return
 	}
 
 	data, err := fetchModels(acc)
 	if err != nil {
-		jsonError(w, fmt.Sprintf("failed to fetch models: %v", err), http.StatusBadGateway)
+		fmt.Printf("[server] fetchModels failed: %v, using static list\n", err)
+		w.Write(staticModelsJSON)
 		return
 	}
 
-	// Wrap raw Zed model list into OpenAI format if needed
-	var raw map[string]json.RawMessage
-	if json.Unmarshal(data, &raw) != nil || raw["data"] == nil {
-		// Zed returns array directly; wrap it
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
+	// Zed returns {"models":[{"id":...,"provider":...},...]}
+	// Convert to OpenAI format: {"object":"list","data":[{"id":...,"object":"model","owned_by":...},...]}
+	converted, err := convertZedModels(data)
+	if err != nil {
+		fmt.Printf("[server] convertZedModels failed: %v, using static list\n", err)
+		w.Write(staticModelsJSON)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
+	w.Write(converted)
+}
+
+// convertZedModels converts Zed's model list format to OpenAI format.
+func convertZedModels(data []byte) ([]byte, error) {
+	var zedResp struct {
+		Models []struct {
+			ID       string `json:"id"`
+			Provider string `json:"provider"`
+			Name     string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(data, &zedResp); err != nil {
+		return nil, err
+	}
+	if zedResp.Models == nil {
+		return nil, fmt.Errorf("no 'models' field in response")
+	}
+
+	type modelEntry struct {
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		OwnedBy string `json:"owned_by"`
+	}
+	entries := make([]modelEntry, 0, len(zedResp.Models))
+	for _, m := range zedResp.Models {
+		entries = append(entries, modelEntry{
+			ID:      m.ID,
+			Object:  "model",
+			OwnedBy: m.Provider,
+		})
+	}
+	return json.Marshal(map[string]any{
+		"object": "list",
+		"data":   entries,
+	})
 }
 
 // handleAccounts returns the account list as JSON.

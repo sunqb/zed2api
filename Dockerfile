@@ -24,6 +24,7 @@ COPY go.mod go.sum* ./
 RUN go mod download
 
 COPY *.go ./
+COPY models.json ./
 
 # Copy pre-built WebUI so go:embed picks it up
 COPY --from=webui-builder /build/webui/dist ./webui/dist/
