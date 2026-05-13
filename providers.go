@@ -14,6 +14,7 @@ func normalizeModelName(name string) string {
 		{"claude-opus-4-6", "claude-opus-4-6"},
 		{"claude-opus-4-5", "claude-opus-4-5"},
 		{"claude-opus-4-1", "claude-opus-4-1"},
+		{"claude-sonnet-4-6", "claude-sonnet-4-6"},
 		{"claude-sonnet-4-5", "claude-sonnet-4-5"},
 		{"claude-sonnet-4", "claude-sonnet-4"},
 		{"claude-3-7-sonnet", "claude-3-7-sonnet"},
