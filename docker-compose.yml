@@ -9,6 +9,7 @@ services:
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - ALL_PROXY=${ALL_PROXY:-}
       - ACCOUNTS_FILE=/data/accounts.json
+      - API_KEY=${API_KEY:-}
     volumes:
       # Mount the directory containing accounts.json (single-file bind mounts
       # are unreliable on some Docker setups)

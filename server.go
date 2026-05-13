@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -49,8 +50,8 @@ func runServer(port int) error {
 	fileServer := http.FileServer(http.FS(distFS))
 	mux.Handle("/", fileServer)
 
-	// ── CORS + logging middleware ─────────────────────────────────────────────
-	handler := corsMiddleware(loggingMiddleware(mux))
+	// ── CORS + auth + logging middleware ─────────────────────────────────────
+	handler := corsMiddleware(authMiddleware(loggingMiddleware(mux)))
 
 	addr := fmt.Sprintf(":%d", port)
 	fmt.Printf("[zed2api] listening on http://0.0.0.0%s\n", addr)
@@ -67,6 +68,36 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// authMiddleware validates API_KEY when set. Skips WebUI paths and OPTIONS.
+func authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := os.Getenv("API_KEY")
+		// No key configured → open access
+		if apiKey == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Skip auth for OPTIONS and WebUI (non-API paths)
+		if r.Method == http.MethodOptions ||
+			(!strings.HasPrefix(r.URL.Path, "/v1/") && !strings.HasPrefix(r.URL.Path, "/zed/")) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Accept: Authorization: Bearer <key>  OR  X-API-Key: <key>
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if token == "" {
+			token = r.Header.Get("X-API-Key")
+		}
+		if token != apiKey {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(w, `{"error":{"message":"invalid api key","type":"invalid_request_error","code":"invalid_api_key"}}`)
 			return
 		}
 		next.ServeHTTP(w, r)
